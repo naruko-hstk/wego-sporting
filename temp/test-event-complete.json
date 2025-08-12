@@ -1,0 +1,143 @@
+{
+  "name": "114年永慶盃全國跆拳道錦標賽(完整版)",
+  "description": "為促進全民體育，增進國民身心健康，培養奮發蓬勃進取，奠定跆拳道運動向下紮根,提升其技術水準,以推廣全民體育為目的。",
+  "region": "chiayi-county",
+  "venue": "嘉義縣立永慶高級中學晨曦館",
+  "address": "612嘉義縣太保市信義二路1號",
+  "signupStart": "2025-06-01",
+  "signupEnd": "2025-07-27",
+  "gameStart": "2025-08-16",
+  "gameEnd": "2025-08-17",
+  "basis": "依據中華民國跆拳道協會最新競賽規則",
+  "note": "報名方式一律採線上報名，報名網址：http://www.chtkd.org.tw/register/",
+  "categories": [
+    {
+      "categoryName": "幼幼組男女混合組(個人品勢)",
+      "conditions": "不分級，太極一章(前12動)"
+    },
+    {
+      "categoryName": "國小男子一般組(低年級個人品勢)",
+      "conditions": "1-3年級，分八級到一級組"
+    },
+    {
+      "categoryName": "國小女子一般組(低年級個人品勢)",
+      "conditions": "1-3年級，分八級到一級組"
+    },
+    {
+      "categoryName": "國小男子一般組(高年級個人品勢)",
+      "conditions": "4-6年級，分八級到一級組"
+    },
+    {
+      "categoryName": "國小女子一般組(高年級個人品勢)",
+      "conditions": "4-6年級，分八級到一級組"
+    },
+    {
+      "categoryName": "國小男子公開組(低年級個人品勢)",
+      "conditions": "1-3年級，太極四章~高麗型抽兩個型"
+    },
+    {
+      "categoryName": "國小女子公開組(低年級個人品勢)",
+      "conditions": "1-3年級，太極四章~高麗型抽兩個型"
+    },
+    {
+      "categoryName": "國小男子公開組(高年級個人品勢)",
+      "conditions": "4-6年級，太極四章~高麗型抽兩個型"
+    },
+    {
+      "categoryName": "國小女子公開組(高年級個人品勢)",
+      "conditions": "4-6年級，太極四章~高麗型抽兩個型"
+    },
+    {
+      "categoryName": "雙人品勢(國小初級組)",
+      "conditions": "八至五級，太極三章"
+    },
+    {
+      "categoryName": "雙人品勢(國小高級組)",
+      "conditions": "四至一級，太極六章"
+    },
+    {
+      "categoryName": "雙人品勢(國小公開組)",
+      "conditions": "一級以上"
+    },
+    {
+      "categoryName": "幼稚園男子組(對練)",
+      "conditions": "具8級以上者，體重分組"
+    },
+    {
+      "categoryName": "幼稚園女子組(對練)",
+      "conditions": "具8級以上者，體重分組"
+    },
+    {
+      "categoryName": "國小男子色帶初級組(對練)",
+      "conditions": "具8至5級資格者，體重分組"
+    },
+    {
+      "categoryName": "國小女子色帶初級組(對練)",
+      "conditions": "具8至5級資格者，體重分組"
+    },
+    {
+      "categoryName": "國小男子色帶高級組(對練)",
+      "conditions": "具4至1級資格者，體重分組"
+    },
+    {
+      "categoryName": "國小女子色帶高級組(對練)",
+      "conditions": "具4至1級資格者，體重分組"
+    },
+    {
+      "categoryName": "國小男子黑帶組(對練)",
+      "conditions": "具1段以上者，體重分組"
+    },
+    {
+      "categoryName": "國小女子黑帶組(對練)",
+      "conditions": "具1段以上者，體重分組"
+    },
+    {
+      "categoryName": "擊破項目(低年級色帶男子組)",
+      "conditions": "下壓、旋踢"
+    },
+    {
+      "categoryName": "擊破項目(低年級色帶女子組)",
+      "conditions": "下壓、旋踢"
+    },
+    {
+      "categoryName": "擊破項目(低年級黑帶男子組)",
+      "conditions": "後踢、後旋、滑步旋踢、360°旋踢"
+    },
+    {
+      "categoryName": "擊破項目(低年級黑帶女子組)",
+      "conditions": "後踢、後旋、滑步旋踢、360°旋踢"
+    }
+  ],
+  "fees": [
+    {
+      "feeType": "個人品勢",
+      "description": "個人品勢項目報名費",
+      "amount": 400
+    },
+    {
+      "feeType": "雙人品勢",
+      "description": "雙人品勢項目報名費",
+      "amount": 600
+    },
+    {
+      "feeType": "團體品勢",
+      "description": "團體品勢項目報名費",
+      "amount": 800
+    },
+    {
+      "feeType": "擊破",
+      "description": "擊破項目報名費",
+      "amount": 300
+    },
+    {
+      "feeType": "對練",
+      "description": "對練項目報名費(傳統護具)",
+      "amount": 600
+    },
+    {
+      "feeType": "公開組對練",
+      "description": "公開組對練報名費(電子護具Deado Gen2)",
+      "amount": 800
+    }
+  ]
+}

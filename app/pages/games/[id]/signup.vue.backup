@@ -1,0 +1,814 @@
+<script setup lang="ts">
+interface TeamMember {
+  id?: string
+  name: string
+  role: string
+  gender: string | undefined
+  birthday?: string | null
+  phone?: string | null
+  email?: string | null
+}
+
+interface FormData {
+  teamName: string
+  leader: TeamMember
+  coach: TeamMember
+  categoryMembers: Record<string, TeamMember[]>
+  selectedTeamId?: string
+  selectedCategoryId?: string
+  note?: string
+}
+
+const route = useRoute()
+const gameId = route.params.id as string
+
+// 初始化狀態
+interface Category {
+  id: string
+  gameId: string
+  type: string
+  group: string
+  level?: string | null
+  weightClass?: string | null
+  fullName: string
+  createdAt: string
+  updatedAt: string
+  game_fee?: { amount: number; categoryId?: string }[]
+}
+interface Team {
+  id: string
+  name: string
+  team_member?: TeamMember[]
+}
+const game = ref<Record<string, unknown> | null>(null)
+const categories = ref<Category[]>([])
+const userTeams = ref<Team[]>([])
+const isLoading = ref(true)
+const error = ref<string | null>(null)
+
+// 載入資料 - 使用 onMounted 而不是 top-level await
+onMounted(async () => {
+  try {
+    // 先設置一些測試資料以確保頁面能顯示
+    game.value = { name: "測試賽事" }
+    categories.value = [
+      {
+        id: "1",
+        gameId: gameId,
+        type: "品勢",
+        group: "男子組",
+        level: "高級",
+        weightClass: null,
+        fullName: "品勢-男子組-高級",
+        createdAt: "",
+        updatedAt: "",
+        game_fee: [{ amount: 1000 }],
+      },
+      {
+        id: "2",
+        gameId: gameId,
+        type: "對打",
+        group: "女子組",
+        level: null,
+        weightClass: "50公斤級",
+        fullName: "對打-女子組-50公斤級",
+        createdAt: "",
+        updatedAt: "",
+        game_fee: [{ amount: 1000 }],
+      },
+    ]
+
+    // 嘗試載入真實資料
+    const [gameResponse, categoriesResponse, teamsResponse] =
+      await Promise.allSettled([
+        $fetch(`/api/games/${gameId}`),
+        $fetch(`/api/game_category`, { query: { gameId } }),
+        $fetch("/api/team"),
+      ])
+
+    if (gameResponse.status === "fulfilled") {
+      const gval = gameResponse.value as unknown
+      game.value =
+        gval && typeof gval === "object" && "data" in gval
+          ? (gval as { data: Record<string, unknown> }).data
+          : (gval as Record<string, unknown>)
+    }
+
+    if (categoriesResponse.status === "fulfilled") {
+      const cval = categoriesResponse.value as unknown
+      const catVal =
+        cval && typeof cval === "object" && "data" in cval
+          ? (cval as { data: Category[] }).data
+          : (cval as Category[])
+      categories.value = Array.isArray(catVal) ? catVal : categories.value
+    }
+
+    if (teamsResponse.status === "fulfilled") {
+      const tval = teamsResponse.value as unknown
+      const teamVal =
+        tval && typeof tval === "object" && "data" in tval
+          ? (tval as { data: Team[] }).data
+          : (tval as Team[])
+      userTeams.value = Array.isArray(teamVal) ? teamVal : []
+    }
+  } catch (e) {
+    console.error("載入失敗:", e)
+    // 即使失敗也顯示測試資料
+  } finally {
+    isLoading.value = false
+  }
+})
+
+// 表單資料
+const formData = ref<FormData>({
+  teamName: "",
+  leader: {
+    name: "",
+    role: "領隊",
+    gender: undefined,
+    birthday: "",
+    phone: "",
+    email: "",
+  },
+  coach: {
+    name: "",
+    role: "教練",
+    gender: undefined,
+    birthday: "",
+    phone: "",
+    email: "",
+  },
+  categoryMembers: {},
+  selectedTeamId: "",
+  selectedCategoryId: "",
+  note: "",
+})
+
+// UI 狀態
+const isSubmitting = ref(false)
+
+// 組別選項：填寫方式選擇（隊員/手動輸入）
+const categoryInputMethods = ref<Record<string, "team-members" | "manual">>({})
+
+// 初始化類別成員和輸入方式
+watchEffect(() => {
+  if (categories.value?.length) {
+    categories.value.forEach((category) => {
+      if (!formData.value.categoryMembers[category.id]) {
+        formData.value.categoryMembers[category.id] = []
+      }
+      if (!categoryInputMethods.value[category.id]) {
+        categoryInputMethods.value[category.id] = "team-members"
+      }
+    })
+  }
+})
+
+// 當選擇手動輸入隊伍時，強制所有組別為手動輸入
+watch(
+  () => formData.value.selectedTeamId,
+  (teamId) => {
+    if (teamId === "custom") {
+      // 強制所有組別為手動輸入
+      Object.keys(categoryInputMethods.value).forEach((categoryId) => {
+        categoryInputMethods.value[categoryId] = "manual"
+      })
+    }
+  },
+)
+
+// 組織分類資料結構
+const organizedCategories = computed(() => {
+  if (!categories.value?.length) return {}
+
+  const organized: Record<string, Record<string, Record<string, Category>>> = {}
+
+  categories.value
+    .filter((cat) => cat.gameId === gameId)
+    .forEach((category) => {
+      const { type, group, level, weightClass } = category
+
+      if (!organized[type]) {
+        organized[type] = {}
+      }
+      if (!organized[type][group]) {
+        organized[type][group] = {}
+      }
+
+      // 使用level或weightClass作為第三層key
+      const thirdLevelKey = level || weightClass || "default"
+      organized[type][group][thirdLevelKey] = category
+    })
+
+  return organized
+})
+
+// 取得隊伍成員選項（排除領隊和教練）
+const getTeamMemberOptions = computed(() => {
+  if (
+    !formData.value.selectedTeamId ||
+    formData.value.selectedTeamId === "custom"
+  ) {
+    return []
+  }
+
+  const selectedTeam = userTeams.value.find(
+    (team) => team.id === formData.value.selectedTeamId,
+  )
+  if (!selectedTeam?.team_member) return []
+
+  return selectedTeam.team_member.filter(
+    (member) => member.role !== "領隊" && member.role !== "教練",
+  )
+})
+
+// 選擇隊伍後自動匯入隊伍名稱、領隊、教練資料，若選手動輸入則清空
+watch(
+  () => formData.value.selectedTeamId,
+  async (teamId) => {
+    if (!teamId) return
+    if (teamId === "custom") {
+      formData.value.teamName = ""
+      formData.value.leader = {
+        name: "",
+        role: "領隊",
+        gender: undefined,
+        birthday: "",
+        phone: "",
+        email: "",
+      }
+      formData.value.coach = {
+        name: "",
+        role: "教練",
+        gender: undefined,
+        birthday: "",
+        phone: "",
+        email: "",
+      }
+      return
+    }
+    try {
+      const response = await $fetch(`/api/team/${teamId}`)
+      const team = response && typeof response === "object" ? response : null
+      if (team) {
+        formData.value.teamName = team.name
+        if (Array.isArray(team.team_member)) {
+          team.team_member.forEach((member: TeamMember) => {
+            if (member.role === "領隊") {
+              formData.value.leader = { ...member }
+            } else if (member.role === "教練") {
+              formData.value.coach = { ...member }
+            }
+          })
+        }
+      }
+    } catch (err) {
+      console.error("匯入隊伍資料失敗:", err)
+    }
+  },
+  { immediate: false },
+)
+
+// 計算費用
+const calculateFee = computed(() => {
+  let totalFee = 0
+  categories.value?.forEach((category) => {
+    const memberCount = formData.value.categoryMembers[category.id]?.length || 0
+    if (memberCount > 0 && Array.isArray(category.game_fee)) {
+      category.game_fee.forEach((fee) => {
+        totalFee += (fee.amount || 0) * memberCount
+      })
+    }
+  })
+  return totalFee
+})
+
+// 切換隊員選擇
+const toggleTeamMember = (categoryId: string, member: TeamMember) => {
+  if (!formData.value.categoryMembers[categoryId]) {
+    formData.value.categoryMembers[categoryId] = []
+  }
+
+  const members = formData.value.categoryMembers[categoryId]
+  const existingIndex = members.findIndex((m) => m.id === member.id)
+
+  if (existingIndex > -1) {
+    // 移除隊員
+    members.splice(existingIndex, 1)
+  } else {
+    // 新增隊員
+    members.push({ ...member })
+  }
+}
+
+// 新增手動輸入隊員
+const addCategoryMember = (categoryId: string) => {
+  if (!formData.value.categoryMembers[categoryId]) {
+    formData.value.categoryMembers[categoryId] = []
+  }
+
+  formData.value.categoryMembers[categoryId].push({
+    name: "",
+    role: "選手",
+    gender: undefined,
+    birthday: null,
+    phone: null,
+    email: null,
+  })
+}
+
+// 移除手動輸入隊員
+const removeCategoryMember = (categoryId: string, index: number) => {
+  if (formData.value.categoryMembers[categoryId]) {
+    formData.value.categoryMembers[categoryId].splice(index, 1)
+  }
+}
+
+// 更新輸入方式
+const updateInputMethod = (categoryId: string, method: "team-members" | "manual") => {
+  categoryInputMethods.value[categoryId] = method
+}
+
+// 提交報名
+const submitRegistration = async () => {
+  if (isSubmitting.value) return
+
+  try {
+    isSubmitting.value = true
+
+    // 收集所有參與者
+    const allParticipants = []
+
+    // 加入領隊和教練
+    allParticipants.push(formData.value.leader, formData.value.coach)
+
+    // 加入所有類別的隊員
+    Object.values(formData.value.categoryMembers).forEach((members) => {
+      allParticipants.push(...members)
+    })
+
+    const payload = {
+      categoryId: formData.value.selectedCategoryId,
+      teamId: formData.value.selectedTeamId,
+      participants: allParticipants.filter((p) => p.name.trim()),
+      note: formData.value.note,
+    }
+
+    await $fetch(`/api/games/${gameId}/signup`, {
+      method: "POST",
+      body: payload,
+    })
+
+    // 報名成功，跳轉到確認頁面
+    await navigateTo(`/games/${gameId}`)
+  } catch (err) {
+    console.error("報名失敗:", err)
+  } finally {
+    isSubmitting.value = false
+  }
+}
+</script>
+
+<template>
+  <div class="min-h-screen">
+    <UContainer class="py-8">
+      <!-- 載入狀態 -->
+      <div
+        v-if="isLoading"
+        class="flex min-h-[400px] items-center justify-center"
+      >
+        <div class="text-center">
+          <div
+            class="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-4 border-t-transparent"
+          ></div>
+          <p>載入中...</p>
+        </div>
+      </div>
+
+      <!-- 錯誤狀態 -->
+      <div v-else-if="error" class="py-12 text-center">
+        <div class="mx-auto max-w-md rounded-lg border p-6">
+          <h2 class="mb-2 font-semibold">載入失敗</h2>
+          <p>{{ error }}</p>
+          <UButton class="mt-4" @click="$router.go(0)">重新載入</UButton>
+        </div>
+      </div>
+
+      <!-- 主要內容 -->
+      <div v-else>
+        <div class="mb-8">
+          <h1 class="text-3xl font-bold">賽事報名</h1>
+          <p class="mt-2">{{ game?.name || "未知賽事" }}</p>
+        </div>
+
+        <div class="grid gap-8 lg:grid-cols-3">
+          <!-- 左側：報名表單 -->
+          <div class="lg:col-span-2">
+            <UCard class="p-6">
+              <!-- 隊伍選擇（手動填入選項） -->
+              <div class="mb-6">
+                <h3 class="mb-3 text-lg font-medium">選擇隊伍</h3>
+                <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <USelect
+                    v-model="formData.selectedTeamId"
+                    :items="[
+                      { label: '手動輸入', value: 'custom' },
+                      ...(userTeams
+                        ? userTeams.map((team) => ({
+                            label: team.name,
+                            value: team.id,
+                          }))
+                        : []),
+                    ]"
+                    placeholder="請選擇隊伍"
+                  />
+                </div>
+              </div>
+
+              <!-- 隊伍名稱 -->
+              <div class="mb-6">
+                <h3 class="mb-3 text-lg font-medium">隊伍名稱</h3>
+                <UInput
+                  v-model="formData.teamName"
+                  placeholder="請輸入隊伍名稱"
+                  size="lg"
+                />
+              </div>
+
+              <!-- 領隊資料 -->
+              <div class="mb-6">
+                <h3 class="mb-3 text-lg font-medium">領隊資料</h3>
+                <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <UInput
+                    v-model="formData.leader.name"
+                    placeholder="領隊姓名"
+                  />
+                  <USelect
+                    v-model="formData.leader.gender"
+                    :items="[
+                      { label: '男', value: 'male' },
+                      { label: '女', value: 'female' },
+                    ]"
+                  />
+                  <UInput
+                    v-model="formData.leader.phone"
+                    placeholder="聯絡電話"
+                  />
+                  <UInput
+                    v-model="formData.leader.email"
+                    placeholder="電子信箱"
+                    type="email"
+                  />
+                  <UInput
+                    v-model="formData.leader.birthday"
+                    placeholder="生日"
+                    type="date"
+                  />
+                </div>
+              </div>
+
+              <!-- 教練資料 -->
+              <div class="mb-6">
+                <h3 class="mb-3 text-lg font-medium">教練資料</h3>
+                <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <UInput
+                    v-model="formData.coach.name"
+                    placeholder="教練姓名"
+                  />
+                  <USelect
+                    v-model="formData.coach.gender"
+                    :items="[
+                      { label: '男', value: 'male' },
+                      { label: '女', value: 'female' },
+                    ]"
+                  />
+                  <UInput
+                    v-model="formData.coach.phone"
+                    placeholder="聯絡電話"
+                  />
+                  <UInput
+                    v-model="formData.coach.email"
+                    placeholder="電子信箱"
+                    type="email"
+                  />
+                  <UInput
+                    v-model="formData.coach.birthday"
+                    placeholder="生日"
+                    type="date"
+                  />
+                </div>
+              </div>
+
+              <!-- 組別選擇（嵌套展開/收合） -->
+              <div class="mb-6">
+                <h3 class="mb-3 text-lg font-medium">參賽組別</h3>
+                <div
+                  v-if="Object.keys(organizedCategories).length > 0"
+                  class="space-y-4"
+                >
+                  <CategorySelectionNew
+                    :organized-categories="organizedCategories"
+                    :category-input-methods="categoryInputMethods"
+                    :form-data="formData"
+                    :team-member-options="getTeamMemberOptions"
+                    @toggle-team-member="toggleTeamMember"
+                    @add-category-member="addCategoryMember"
+                    @remove-category-member="removeCategoryMember"
+                    @update-input-method="updateInputMethod"
+                  />
+                </div>
+                <div v-else class="py-8 text-center">
+                  <p>此賽事尚未設定組別</p>
+                </div>
+              </div>
+                  <!-- 第一層：類型（品勢/對打） -->
+                  <div
+                    v-for="(groups, type) in organizedCategories"
+                    :key="type"
+                    class="rounded-lg border border-gray-200"
+                  >
+                    <UAccordion
+                      :items="[
+                        {
+                          label: type,
+                          defaultOpen: true,
+                        },
+                      ]"
+                    >
+                      <template #default>
+                        <!-- 第二層：組別 -->
+                        <div class="space-y-2">
+                          <div
+                            v-for="(subCategories, group) in groups"
+                            :key="group"
+                            class="ml-4 rounded border border-gray-100"
+                          >
+                            <UAccordion
+                              :items="[
+                                {
+                                  label: group,
+                                  defaultOpen: false,
+                                },
+                              ]"
+                            >
+                              <template #default>
+                                <!-- 第三層：等級/量級 -->
+                                <div class="space-y-3">
+                                  <div
+                                    v-for="category in Object.values(
+                                      subCategories,
+                                    )"
+                                    :key="category.id"
+                                    class="ml-4 border-l-2 border-gray-100 pl-4"
+                                  >
+                                    <div class="rounded-lg border p-4">
+                                      <div class="mb-3 font-medium">
+                                        {{ category.fullName }}
+                                      </div>
+
+                                      <!-- 參賽方式選擇 -->
+                                      <div class="mb-4">
+                                        <URadioGroup
+                                          v-model="
+                                            categoryInputMethods[category.id]
+                                          "
+                                          :options="[
+                                            {
+                                              value: 'team-members',
+                                              label: '選擇隊員',
+                                              disabled:
+                                                formData.selectedTeamId ===
+                                                'custom',
+                                            },
+                                            {
+                                              value: 'manual',
+                                              label: '手動輸入',
+                                            },
+                                          ]"
+                                          class="flex gap-4"
+                                        />
+                                      </div>
+
+                                      <!-- 隊員選擇區域 -->
+                                      <div
+                                        v-if="
+                                          categoryInputMethods[category.id] ===
+                                          'team-members'
+                                        "
+                                      >
+                                        <div
+                                          v-if="
+                                            formData.selectedTeamId === 'custom'
+                                          "
+                                          class="mb-2 text-sm text-gray-500"
+                                        >
+                                          <UTooltip
+                                            text="此功能只能在選擇隊伍時使用"
+                                          >
+                                            <span class="cursor-help">
+                                              選擇隊員功能不可用（需先選擇隊伍）
+                                            </span>
+                                          </UTooltip>
+                                        </div>
+                                        <div
+                                          v-else-if="
+                                            getTeamMemberOptions.length === 0
+                                          "
+                                          class="mb-2 text-sm text-gray-500"
+                                        >
+                                          該隊伍沒有可選的隊員
+                                        </div>
+                                        <div v-else>
+                                          <p class="mb-2 text-sm text-gray-600">
+                                            選擇參賽隊員：
+                                          </p>
+                                          <div
+                                            class="grid grid-cols-1 gap-2 md:grid-cols-2"
+                                          >
+                                            <label
+                                              v-for="member in getTeamMemberOptions"
+                                              :key="member.id"
+                                              class="flex cursor-pointer items-center space-x-2"
+                                            >
+                                              <UCheckbox
+                                                :model-value="
+                                                  formData.categoryMembers[
+                                                    category.id
+                                                  ]?.some(
+                                                    (m: TeamMember) =>
+                                                      m.id === member.id,
+                                                  )
+                                                "
+                                                @change="
+                                                  toggleTeamMember(
+                                                    category.id,
+                                                    member,
+                                                  )
+                                                "
+                                              />
+                                              <span class="text-sm">
+                                                {{ member.name }} ({{
+                                                  member.role
+                                                }})
+                                              </span>
+                                            </label>
+                                          </div>
+                                        </div>
+                                      </div>
+
+                                      <!-- 手動輸入區域 -->
+                                      <div v-else class="space-y-3">
+                                        <div
+                                          v-for="(
+                                            member, memberIndex
+                                          ) in formData.categoryMembers[
+                                            category.id
+                                          ]"
+                                          :key="memberIndex"
+                                          class="grid grid-cols-1 gap-2 md:grid-cols-4"
+                                        >
+                                          <UInput
+                                            v-model="member.name"
+                                            placeholder="姓名"
+                                          />
+                                          <UInput
+                                            v-model="member.role"
+                                            placeholder="角色"
+                                          />
+                                          <USelect
+                                            v-model="member.gender"
+                                            :items="[
+                                              { label: '男', value: 'male' },
+                                              { label: '女', value: 'female' },
+                                            ]"
+                                            placeholder="性別"
+                                          />
+                                          <UButton
+                                            color="red"
+                                            variant="soft"
+                                            icon="i-heroicons-trash"
+                                            @click="
+                                              removeCategoryMember(
+                                                category.id,
+                                                memberIndex,
+                                              )
+                                            "
+                                          >
+                                            移除
+                                          </UButton>
+                                        </div>
+
+                                        <UButton
+                                          variant="soft"
+                                          icon="i-heroicons-plus"
+                                          @click="
+                                            addCategoryMember(category.id)
+                                          "
+                                        >
+                                          新增隊員
+                                        </UButton>
+                                      </div>
+
+                                      <!-- 費用資訊 -->
+                                      <div class="mt-3 text-sm text-gray-600">
+                                        費用：NT$
+                                        {{
+                                          category.game_fee?.[0]?.amount || 0
+                                        }}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              </template>
+                            </UAccordion>
+                          </div>
+                        </div>
+                      </template>
+                    </UAccordion>
+                  </div>
+                </div>
+                <div v-else class="py-8 text-center">
+                  <p>此賽事尚未設定組別</p>
+                </div>
+              </div>
+            </UCard>
+          </div>
+
+          <!-- 右側：費用試算 -->
+          <div class="lg:col-span-1">
+            <div class="sticky top-8">
+              <UCard class="p-6">
+                <h3 class="mb-4 text-xl font-semibold">費用試算</h3>
+
+                <div class="space-y-4">
+                  <!-- 各組別費用明細 -->
+                  <div
+                    v-for="category in categories.filter(
+                      (cat) =>
+                        (formData.categoryMembers[cat.id]?.length || 0) > 0,
+                    )"
+                    :key="category.id"
+                    class="border-b pb-3 last:border-b-0"
+                  >
+                    <div class="flex items-center justify-between">
+                      <span class="text-sm">{{ category.fullName }}</span>
+                      <div class="text-right">
+                        <div class="text-sm">
+                          {{
+                            formData.categoryMembers[category.id]?.length || 0
+                          }}
+                          人
+                        </div>
+                        <div class="font-medium">
+                          NT$
+                          {{
+                            (
+                              (formData.categoryMembers[category.id]?.length ||
+                                0) * (category.game_fee?.[0]?.amount || 0)
+                            ).toLocaleString()
+                          }}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- 總計 -->
+                  <div class="border-t pt-3">
+                    <div
+                      class="flex items-center justify-between text-lg font-bold"
+                    >
+                      <span>總計</span>
+                      <span>NT$ {{ calculateFee.toLocaleString() }}</span>
+                    </div>
+                  </div>
+
+                  <!-- 報名須知 -->
+                  <div class="mt-6 rounded-lg p-4">
+                    <h4 class="mb-2 font-medium">報名須知</h4>
+                    <ul class="space-y-1 text-sm">
+                      <li>• 報名費用需於指定時間內完成繳費</li>
+                      <li>• 參賽者需自備運動用品</li>
+                      <li>• 報名後如需更改資料請聯繫主辦單位</li>
+                    </ul>
+                  </div>
+
+                  <!-- 提交按鈕 -->
+                  <UButton
+                    :loading="isSubmitting"
+                    :disabled="!formData.teamName"
+                    block
+                    size="lg"
+                    class="mt-6"
+                    @click="submitRegistration"
+                  >
+                    提交報名
+                  </UButton>
+                </div>
+              </UCard>
+            </div>
+          </div>
+        </div>
+      </div>
+    </UContainer>
+  </div>
+</template>

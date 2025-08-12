@@ -1,0 +1,47 @@
+export default defineAppConfig({
+  toaster: {
+    position: "top-center" as const,
+  },
+  ui: {
+    colors: {
+      primary: "green",
+      secondary: "blue",
+      tertiary: "purple",
+      info: "blue",
+      success: "green",
+      warning: "yellow",
+      error: "red",
+      neutral: "slate",
+      black: "black",
+      red: "red",
+      orange: "orange",
+      amber: "amber",
+      yellow: "yellow",
+      lime: "lime",
+      green: "green",
+      emerald: "emerald",
+      teal: "teal",
+      cyan: "cyan",
+      sky: "sky",
+      blue: "blue",
+      indigo: "indigo",
+      violet: "violet",
+      purple: "purple",
+      fuchsia: "fuchsia",
+      pink: "pink",
+      rose: "rose",
+      slate: "slate",
+      gray: "gray",
+      zinc: "zinc",
+      stone: "stone",
+    },
+    container: {
+      base: "w-full max-w-[90dvw] mx-auto px-4 sm:px-6 lg:px-8",
+    },
+  },
+  uiPro: {
+    pageColumns: {
+      base: "relative column-1 md:columns-2 lg:columns-4 gap-4 space-y-4 *:break-inside-avoid-column *:will-change-transform",
+    },
+  },
+})

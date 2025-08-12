@@ -1,0 +1,245 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Gender {
+  M
+  F
+}
+
+model account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime
+  updatedAt             DateTime
+  user                  user      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model activity_log {
+  id          String   @id @default(uuid())
+  action      String
+  entity      String
+  entityId    String?
+  userId      String?
+  description String
+  metadata    Json?
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+
+  @@index([action])
+  @@index([createdAt])
+  @@index([entity])
+  @@index([userId])
+}
+
+model game {
+  id            String          @id @default(uuid())
+  name          String
+  region        String
+  venue         String
+  address       String
+  signupStart   DateTime
+  signupEnd     DateTime
+  gameStart     DateTime
+  gameEnd       DateTime
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime
+  game_category game_category[]
+  game_detail   game_detail?
+  game_fee      game_fee[]
+  registration  registration[]
+}
+
+model game_category {
+  id           String         @id @default(uuid())
+  gameId       String
+  categoryName String // 組別全名，直接填寫
+  conditions   String? // 條件限制（選填），例如：年齡限制、性別限制等
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  game         game           @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  game_fee     game_fee[]
+  registration registration[]
+}
+
+model game_detail {
+  id        String   @id @default(uuid())
+  gameId    String   @unique
+  basis     String?
+  note      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime
+  game      game     @relation(fields: [gameId], references: [id], onDelete: Cascade)
+}
+
+model game_fee {
+  id            String         @id @default(uuid())
+  gameId        String
+  categoryId    String?
+  feeType       String
+  description   String
+  amount        Decimal
+  isRequired    Boolean        @default(true)
+  note          String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime
+  game_category game_category? @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  game          game           @relation(fields: [gameId], references: [id], onDelete: Cascade)
+}
+
+model registration {
+  id                       String                     @id @default(uuid())
+  gameId                   String
+  categoryId               String
+  teamId                   String? // 改為可選，支援個人報名
+  registrantUserId         String
+  status                   String                     @default("pending")
+  note                     String?
+  submittedAt              DateTime                   @default(now())
+  reviewedAt               DateTime?
+  reviewedBy               String?
+  createdAt                DateTime                   @default(now())
+  updatedAt                DateTime                   @updatedAt
+  game_category            game_category              @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  game                     game                       @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  user                     user                       @relation(fields: [registrantUserId], references: [id], onDelete: Cascade)
+  team                     team?                      @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  registration_participant registration_participant[]
+
+  @@unique([gameId, categoryId, teamId])
+  @@unique([gameId, categoryId, registrantUserId]) // 個人報名的唯一性約束
+}
+
+model registration_participant {
+  id             String       @id @default(uuid())
+  registrationId String
+  userPlayerId   String? // 新的隊員關聯
+  teamMemberId   String? // 保留舊的關聯（暫時）
+  isMainPlayer   Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  registration   registration @relation(fields: [registrationId], references: [id], onDelete: Cascade)
+  user_player    user_player? @relation(fields: [userPlayerId], references: [id], onDelete: Cascade)
+  team_member    team_member? @relation(fields: [teamMemberId], references: [id], onDelete: Cascade)
+
+  @@unique([registrationId, userPlayerId])
+  @@unique([registrationId, teamMemberId])
+}
+
+model session {
+  id             String   @id
+  expiresAt      DateTime
+  token          String   @unique
+  createdAt      DateTime
+  updatedAt      DateTime
+  ipAddress      String?
+  userAgent      String?
+  userId         String
+  impersonatedBy String?
+  user           user     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model team {
+  id           String         @id @default(uuid())
+  name         String
+  userId       String
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime
+  user         user           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  registration registration[]
+  team_staff   team_staff[]
+  team_member  team_member[] // 暫時保留
+}
+
+model team_staff {
+  id        String   @id @default(uuid())
+  teamId    String
+  role      String // "leader" 或 "coach"
+  name      String
+  phone     String?
+  email     String?
+  address   String?
+  lineId    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  team      team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+}
+
+model user_player {
+  id                       String                     @id @default(uuid())
+  userId                   String
+  name                     String
+  gender                   Gender
+  birthday                 DateTime
+  isBanned                 Boolean                    @default(false)
+  banReason                String?
+  banUntil                 DateTime?
+  createdAt                DateTime                   @default(now())
+  updatedAt                DateTime                   @updatedAt
+  user                     user                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  registration_participant registration_participant[]
+}
+
+model team_member {
+  id                       String                     @id @default(uuid())
+  teamId                   String
+  name                     String
+  role                     String
+  gender                   Gender
+  birthday                 DateTime
+  isBanned                 Boolean                    @default(false)
+  banReason                String?
+  banUntil                 DateTime?
+  phone                    String?
+  lineId                   String?
+  email                    String?
+  createdAt                DateTime                   @default(now())
+  updatedAt                DateTime
+  registration_participant registration_participant[]
+  team                     team                       @relation(fields: [teamId], references: [id], onDelete: Cascade)
+}
+
+model user {
+  id              String         @id
+  name            String
+  email           String         @unique
+  emailVerified   Boolean
+  image           String?
+  createdAt       DateTime
+  updatedAt       DateTime
+  role            String?
+  banned          Boolean?
+  banReason       String?
+  banExpires      DateTime?
+  username        String?        @unique
+  displayUsername String?
+  account         account[]
+  team            team[]
+  registration    registration[]
+  session         session[]
+  user_player     user_player[]
+}
+
+model verification {
+  id         String    @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime?
+  updatedAt  DateTime?
+}
