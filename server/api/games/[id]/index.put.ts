@@ -97,6 +97,36 @@ export default defineEventHandler(async (event) => {
       })
     }
 
+    // 與 post 一致：展開 categories 與 fees
+    const categories = []
+    if (Array.isArray(body.categories)) {
+      for (const cat of body.categories) {
+        if (cat.groups && Array.isArray(cat.groups)) {
+          for (const group of cat.groups) {
+            categories.push({
+              categoryName: `${cat.name}-${group}`,
+              // 可依需求加上其他欄位
+            })
+          }
+        } else {
+          categories.push({
+            categoryName: cat.name,
+          })
+        }
+      }
+    }
+
+    const fees = []
+    if (Array.isArray(body.fees)) {
+      for (const fee of body.fees) {
+        fees.push({
+          feeType: fee.name || fee.feeType || "",
+          amount: fee.amount,
+          description: fee.description || "",
+        })
+      }
+    }
+
     // 使用 transaction 確保資料一致性
     const result = await prisma.$transaction(async (tx) => {
       // 更新賽事基本資料
@@ -135,12 +165,7 @@ export default defineEventHandler(async (event) => {
       }
 
       // 重新建立費用和分類（簡單做法：刪除舊的，建立新的）
-      if (
-        body.fees &&
-        Array.isArray(body.fees) &&
-        body.categories &&
-        Array.isArray(body.categories)
-      ) {
+      if (fees.length && categories.length) {
         // 刪除現有分類和費用（級聯刪除會自動處理）
         await tx.game_category.deleteMany({
           where: { gameId: game.id },
@@ -151,7 +176,7 @@ export default defineEventHandler(async (event) => {
 
         // 先建立分類並取得 ID，然後建立費用
         const createdCategories = await Promise.all(
-          body.categories.map(
+          categories.map(
             async (
               category: { categoryName: string; conditions?: string },
               index: number,
@@ -170,51 +195,29 @@ export default defineEventHandler(async (event) => {
           ),
         )
 
-        // 建立費用並關聯到對應的分類
-        for (const fee of body.fees) {
-          if (fee.categoryIndex !== undefined) {
-            const relatedCategory = createdCategories.find(
-              (cat) => cat.originalIndex === fee.categoryIndex,
-            )
-            if (relatedCategory) {
-              const feeId = randomUUID()
-              await tx.game_fee.create({
-                data: {
-                  id: feeId,
-                  gameId: game.id,
-                  categoryId: relatedCategory.id, // 建立與分類的關聯
-                  feeType: fee.feeType,
-                  description: fee.description || "",
-                  amount: fee.amount,
-                  createdAt: new Date(),
-                  updatedAt: new Date(),
-                },
-              })
-            }
-          } else {
-            // 如果沒有指定分類，則建立通用費用
-            const feeId = randomUUID()
-            await tx.game_fee.create({
-              data: {
-                id: feeId,
-                gameId: game.id,
-                categoryId: null,
-                feeType: fee.feeType,
-                description: fee.description || "",
-                amount: fee.amount,
-                createdAt: new Date(),
-                updatedAt: new Date(),
-              },
-            })
-          }
+        // 建立費用（不自動關聯分類，與 post 行為一致）
+        for (const fee of fees) {
+          const feeId = randomUUID()
+          await tx.game_fee.create({
+            data: {
+              id: feeId,
+              gameId: game.id,
+              categoryId: null,
+              feeType: fee.feeType,
+              description: fee.description || "",
+              amount: fee.amount,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            },
+          })
         }
-      } else if (body.categories && Array.isArray(body.categories)) {
+      } else if (categories.length) {
         // 只有分類沒有費用的情況
         await tx.game_category.deleteMany({
           where: { gameId: game.id },
         })
 
-        for (const category of body.categories) {
+        for (const category of categories) {
           const categoryId = randomUUID()
           await tx.game_category.create({
             data: {

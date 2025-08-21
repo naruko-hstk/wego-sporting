@@ -47,7 +47,7 @@ const handleRefresh = () => {
     </UPageColumns>
 
     <!-- 錯誤狀態 -->
-    <empty-state
+    <EmptyState
       v-else-if="error"
       icon="i-lucide-triangle-alert"
       title="載入賽事資料時發生錯誤"
@@ -56,10 +56,10 @@ const handleRefresh = () => {
       <template #actions>
         <UButton color="red" @click="handleRefresh">重新載入</UButton>
       </template>
-    </empty-state>
+    </EmptyState>
 
     <!-- 無資料狀態 -->
-    <empty-state
+    <EmptyState
       v-else-if="!games.length"
       icon="i-lucide-calendar-x"
       title="目前沒有近期賽事"

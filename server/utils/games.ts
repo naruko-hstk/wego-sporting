@@ -56,6 +56,8 @@ export const getGame = async (id?: string, region?: string) => {
         region: region,
       },
       include: {
+        game_category: true,
+        game_fee: true,
         _count: {
           select: {
             registration: true,
@@ -70,6 +72,8 @@ export const getGame = async (id?: string, region?: string) => {
   } else {
     return await prisma.game.findMany({
       include: {
+        game_category: true,
+        game_fee: true,
         _count: {
           select: {
             registration: true,
@@ -101,6 +105,7 @@ export const createGame = async (data: {
   basis?: string
   note?: string
   categories?: Array<{
+    categoryType: string
     categoryName: string
     conditions?: string
   }>
@@ -108,6 +113,8 @@ export const createGame = async (data: {
     feeType: string
     description?: string
     amount: number
+    categoryType?: string
+    categoryName?: string
     categoryId?: string
   }>
 }) => {
@@ -139,34 +146,52 @@ export const createGame = async (data: {
       })
     }
 
-    // Create categories if provided
-    if (data.categories && Array.isArray(data.categories)) {
-      for (const category of data.categories) {
-        await tx.game_category.create({
-          data: {
-            gameId: game.id,
-            categoryName: category.categoryName,
-            conditions: category.conditions,
-            updatedAt: new Date(),
-          },
-        })
-      }
+    // Create categories if provided (批次)
+    if (
+      data.categories &&
+      Array.isArray(data.categories) &&
+      data.categories.length > 0
+    ) {
+      await tx.game_category.createMany({
+        data: data.categories.map((category) => ({
+          gameId: game.id,
+          categoryType: category.categoryType,
+          categoryName: category.categoryName,
+          conditions: category.conditions,
+          updatedAt: new Date(),
+          createdAt: new Date(),
+        })),
+      })
     }
 
-    // Create fees if provided
-    if (data.fees && Array.isArray(data.fees)) {
-      for (const fee of data.fees) {
-        await tx.game_fee.create({
-          data: {
+    // Create fees if provided (批次)
+    if (data.fees && Array.isArray(data.fees) && data.fees.length > 0) {
+      // 先查出所有 category
+      const allCategories = await tx.game_category.findMany({
+        where: { gameId: game.id },
+      })
+      await tx.game_fee.createMany({
+        data: data.fees.map((fee) => {
+          let categoryId = null
+          if (fee.categoryType && fee.categoryName) {
+            const cat = allCategories.find(
+              (c) =>
+                c.categoryType === fee.categoryType &&
+                c.categoryName === fee.categoryName,
+            )
+            if (cat) categoryId = cat.id
+          }
+          return {
             gameId: game.id,
-            categoryId: fee.categoryId || null,
+            categoryId,
             feeType: fee.feeType,
             description: fee.description || "",
             amount: fee.amount,
             updatedAt: new Date(),
-          },
-        })
-      }
+            createdAt: new Date(),
+          }
+        }),
+      })
     }
 
     return game

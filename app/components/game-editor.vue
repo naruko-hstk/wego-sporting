@@ -11,106 +11,60 @@ interface Emits {
   (e: "saved"): void
 }
 
-const props = defineProps<Props>()
-const emit = defineEmits<Emits>()
+// 新增分類（新版）
+const addCategory = () => {
+  categories.value.push({
+    categoryType: "",
+    categoryName: "",
+    conditions: "",
+  })
+}
 
-// 表單資料
-const form = ref({
-  name: "",
-  region: "",
-  venue: "",
-  address: "",
-  signupStart: "",
-  signupEnd: "",
-  gameStart: "",
-  gameEnd: "",
-  // 新增的欄位
-  description: "",
-  basis: "",
-  note: "",
-  feeInfo: "",
-})
-
-// 賽事分類表單
-const categories = ref<
-  Array<{
-    id?: string
-    type: string // 競賽類型：品勢、對打
-    ageGroup: string // 組別：手動填寫，例如：高中男子組
-    gender: string // 性別：個人、雙人、團體（品勢），個人、團體（對打）
-    weightClass: string // 量級（僅對打需要）
-    fullName: string // 自動生成的完整名稱
-  }>
->([])
-
-// 賽事費用表單
-const fees = ref<
-  Array<{
-    id?: string
-    categoryIndex?: number // 關聯的分類索引
-    type: string
-    amount: number
-    description: string
-  }>
->([])
-
-// 當前編輯的分類/費用
-const editingCategoryIndex = ref(-1)
-const editingFeeIndex = ref(-1)
-
-// 分頁狀態
-const currentTab = ref("basic")
-
-// 分頁選項
-const tabs = [
-  { value: "basic", label: "基本資訊", icon: "i-lucide-info" },
-  { value: "details", label: "詳細說明", icon: "i-lucide-file-text" },
-  { value: "categories", label: "賽事分類", icon: "i-lucide-list" },
-  { value: "fees", label: "費用設定", icon: "i-lucide-dollar-sign" },
-]
-
-// 競賽類型選項（目前僅開放品勢和對打）
-const categoryTypeOptions = [
-  { label: "品勢", value: "品勢" },
-  { label: "對打", value: "對打" },
-  // 未來可能會擴充其他類型
-  // { label: "威力擊破", value: "威力擊破" },
-  // { label: "特技", value: "特技" },
-]
-
-// 組別選項（取代原本年齡組功能，改為手動填寫）
-// 暫時註解掉，未來試點完畢後可能恢復下拉選單
-// const ageGroupOptions = [
-//   { label: "幼兒", value: "幼兒" },
-//   { label: "國小", value: "國小" },
-//   { label: "國中", value: "國中" },
-//   { label: "高中", value: "高中" },
-//   { label: "大專", value: "大專" },
-//   { label: "社會", value: "社會" },
-// ]
-
-// 性別選項（改為個人、雙人、團體）
-// 注意：這個選項現在用於"性別"欄位，實際上是組別形式
-// const genderOptions = [
-//   { label: "個人", value: "個人" },
-//   { label: "雙人", value: "雙人" },
-//   { label: "團體", value: "團體" },
-// ]
-
-// 組別形式選項（根據競賽類型動態顯示）
-const getGroupOptions = (type: string) => {
-  if (type === "品勢") {
-    return [
-      { label: "個人", value: "個人" },
-      { label: "雙人", value: "雙人" },
-      { label: "團體", value: "團體" },
-    ]
+// 刪除分類（新版）
+const removeCategory = (index: number) => {
+  const removed = categories.value.splice(index, 1)[0]
+  if (removed && removed.categoryType) {
+    const feeIdx = fees.value.findIndex(f => f.categoryType === removed.categoryType)
+    if (feeIdx !== -1) fees.value.splice(feeIdx, 1)
   }
-  if (type === "對打") {
-    return [
-      { label: "個人", value: "個人" },
-      { label: "團體", value: "團體" },
-    ]
+  if (editingCategoryIndex.value === index) {
+    editingCategoryIndex.value = -1
+  }
+}
+
+// 當分類有異動時，自動同步費用表單（新版）
+watch(categories, (newCats) => {
+  const types = Array.from(new Set(newCats.map(c => c.categoryType).filter(Boolean)))
+  fees.value = fees.value.filter(f => types.includes(f.categoryType))
+  types.forEach(type => {
+    if (!fees.value.find(f => f.categoryType === type)) {
+      fees.value.push({ categoryType: type, feeType: `${type}報名費`, amount: 0 })
+    }
+  })
+}, { deep: true })
+
+// 編輯分類索引
+const editCategory = (index: number) => {
+  editingCategoryIndex.value = index
+}
+
+// 儲存分類編輯（新版）
+const saveCategoryEdit = () => {
+  if (editingCategoryIndex.value >= 0) {
+    const category = categories.value[editingCategoryIndex.value]
+    if (category) {
+      // 自動生成完整名稱（categoryName）
+      const parts = [category.categoryType, category.conditions]
+      category.categoryName = parts.filter(Boolean).join("-")
+      // 同步費用名稱
+      const relatedFee = fees.value.find(f => f.categoryType === category.categoryType)
+      if (relatedFee) {
+        relatedFee.feeType = category.categoryName || category.categoryType
+      }
+    }
+    editingCategoryIndex.value = -1
+  }
+}
   }
   // 預設情況
   return [{ label: "個人", value: "個人" }]
@@ -152,40 +106,36 @@ watch(
 watch(
   () => props.game,
   async (game) => {
-    // 重置分頁到第一頁
-    currentTab.value = "basic"
+    // 新版賽事分類表單
+    const categories = ref<
+      Array<{
+        id?: string
+        categoryType: string // 項目分類
+        categoryName: string // 完整項目名
+        conditions?: string
+      }>
+    >([])
 
-    if (game) {
-      // 編輯模式：填入現有資料
-      form.value = {
-        name: game.name,
-        region: game.region,
-        venue: game.venue,
-        address: game.address,
-        signupStart: new Date(game.signupStart).toISOString().slice(0, 16),
-        signupEnd: new Date(game.signupEnd).toISOString().slice(0, 16),
-        gameStart: new Date(game.gameStart).toISOString().slice(0, 16),
-        gameEnd: new Date(game.gameEnd).toISOString().slice(0, 16),
-        description: "",
-        basis: "",
-        note: "",
-        feeInfo: "",
-      }
-
-      // 載入現有的分類和費用資料
-      try {
+    // 新版費用表單（根據項目分類）
+    const fees = ref<
+      Array<{
+        id?: string
+        categoryType: string // 對應項目分類
+        feeType: string
+        amount: number
+        description?: string
+      }>
+    >([])
         // 載入分類
         const categoriesData = await $fetch(
           `/api/game_category?gameId=${game.id}`,
         )
         if (categoriesData && Array.isArray(categoriesData)) {
-          categories.value = categoriesData.map((cat: unknown) => ({
-            id: String((cat as any).id),
-            type: String((cat as any).type),
-            ageGroup: String((cat as any).group || ""), // 資料庫的 group 對應新版的 ageGroup
-            gender: String((cat as any).level || ""), // 資料庫的 level 對應新版的 gender
-            weightClass: String((cat as any).weightClass || ""),
-            fullName: String((cat as any).fullName),
+          categories.value = categoriesData.map((cat: any) => ({
+            id: String(cat.id),
+            categoryType: String(cat.categoryType || cat.type || ""),
+            categoryName: String(cat.categoryName || cat.fullName || ""),
+            conditions: cat.conditions || "",
           }))
         }
 
@@ -193,33 +143,27 @@ watch(
         const feesData = await $fetch(`/api/game_fee?gameId=${game.id}`)
         if (feesData && Array.isArray(feesData)) {
           // 根據分類順序建立費用，每個分類對應一個費用項目
-          fees.value = categories.value.map((category, index) => {
+          fees.value = categories.value.map((category) => {
             // 嘗試找到對應的費用資料
             const matchingFee = feesData.find(
-              (fee: unknown) =>
-                (fee as any).feeType === category.fullName ||
-                (fee as any).categoryId === category.id,
+              (fee: any) =>
+                fee.categoryType === category.categoryType ||
+                fee.feeType === category.categoryType ||
+                fee.categoryId === category.id,
             )
-
             return {
-              id: matchingFee ? (matchingFee as any).id : undefined,
-              categoryIndex: index, // 對應到分類索引
-              type:
-                category.fullName ||
-                `${category.ageGroup}${category.gender}${category.type}`,
-              amount: matchingFee ? Number((matchingFee as any).amount) : 0,
-              description: matchingFee
-                ? (matchingFee as any).description || ""
-                : "",
+              id: matchingFee ? matchingFee.id : undefined,
+              categoryType: category.categoryType,
+              feeType: matchingFee ? matchingFee.feeType : category.categoryType,
+              amount: matchingFee ? Number(matchingFee.amount) : 0,
+              description: matchingFee ? matchingFee.description || "" : "",
             }
           })
         } else {
           // 如果沒有費用資料，為每個分類建立空的費用項目
-          fees.value = categories.value.map((category, index) => ({
-            categoryIndex: index,
-            type:
-              category.fullName ||
-              `${category.ageGroup}${category.gender}${category.type}`,
+          fees.value = categories.value.map((category) => ({
+            categoryType: category.categoryType,
+            feeType: category.categoryType,
             amount: 0,
             description: "",
           }))
@@ -276,28 +220,38 @@ const isValid = computed(() => {
   )
 })
 
-// 分類管理函數
+// 新增分類
 const addCategory = () => {
-  const newCategory = {
-    type: "",
-    ageGroup: "",
-    gender: "",
-    weightClass: "",
-    fullName: "",
-  }
-  categories.value.push(newCategory)
-
-  // 同時添加對應的費用項目
-  const newFee = {
-    categoryIndex: categories.value.length - 1, // 關聯到分類
-    type: "",
-    amount: 0,
-    description: "",
-  }
-  fees.value.push(newFee)
-
-  editingCategoryIndex.value = categories.value.length - 1
+  categories.value.push({
+    categoryType: "",
+    categoryName: "",
+    conditions: "",
+  })
 }
+
+// 刪除分類
+const removeCategory = (index: number) => {
+  const removed = categories.value.splice(index, 1)[0]
+  // 若該分類有費用，則一併移除
+  if (removed && removed.categoryType) {
+    const feeIdx = fees.value.findIndex(f => f.categoryType === removed.categoryType)
+    if (feeIdx !== -1) fees.value.splice(feeIdx, 1)
+  }
+}
+
+// 當分類有異動時，自動同步費用表單
+watch(categories, (newCats) => {
+  // 取得所有不同的 categoryType
+  const types = Array.from(new Set(newCats.map(c => c.categoryType).filter(Boolean)))
+  // 移除已刪除的費用
+  fees.value = fees.value.filter(f => types.includes(f.categoryType))
+  // 新增新出現的 categoryType 費用
+  types.forEach(type => {
+    if (!fees.value.find(f => f.categoryType === type)) {
+      fees.value.push({ categoryType: type, feeType: `${type}報名費`, amount: 0 })
+    }
+  })
+}, { deep: true })
 
 const editCategory = (index: number) => {
   editingCategoryIndex.value = index
@@ -349,16 +303,14 @@ const saveCategoryEdit = () => {
         parts.push(category.ageGroup, category.gender)
       }
 
-      category.fullName = parts.filter(Boolean).join("")
+      category.categoryName = parts.filter(Boolean).join("-")
 
       // 更新對應費用的類型
       const relatedFee = fees.value.find(
-        (fee) => fee.categoryIndex === editingCategoryIndex.value,
+        (fee) => fee.categoryType === category.categoryType,
       )
       if (relatedFee) {
-        relatedFee.type =
-          category.fullName ||
-          `${category.ageGroup}${category.gender}${category.type}`
+        relatedFee.feeType = category.categoryName || category.categoryType
       }
     }
     editingCategoryIndex.value = -1
@@ -416,17 +368,15 @@ const handleSubmit = async () => {
       gameEnd: new Date(form.value.gameEnd).toISOString(),
       // 包含分類和費用資料
       categories: categories.value.map((cat) => ({
-        type: cat.type,
-        group: cat.ageGroup, // 新版的 ageGroup 對應資料庫的 group
-        level: cat.gender, // 新版的 gender 對應資料庫的 level
-        weightClass: cat.weightClass || null,
-        fullName: cat.fullName,
+        categoryType: cat.categoryType,
+        categoryName: cat.categoryName,
+        conditions: cat.conditions,
       })),
       fees: fees.value.map((fee) => ({
-        type: fee.type,
+        categoryType: fee.categoryType,
+        feeType: fee.feeType,
         amount: fee.amount,
-        description: fee.description || null,
-        categoryIndex: fee.categoryIndex, // 傳送分類索引，讓後端建立關聯
+        description: fee.description,
       })),
     }
 

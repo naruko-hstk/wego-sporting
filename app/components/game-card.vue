@@ -37,6 +37,35 @@ const { getRegionName } = useRegion()
       </div>
     </template>
 
+    <!-- 類別資訊 -->
+    <div v-if="game.game_category && game.game_category.length" class="mt-2">
+      <div class="mb-1 text-xs font-semibold text-gray-500">賽事組別</div>
+      <div class="flex flex-wrap gap-2">
+        <UBadge
+          v-for="cat in game.game_category"
+          :key="cat.id"
+          color="primary"
+          variant="soft"
+        >
+          {{ cat.categoryName }}
+        </UBadge>
+      </div>
+    </div>
+
+    <!-- 費用資訊 -->
+    <div v-if="game.game_fee && game.game_fee.length" class="mt-2">
+      <div class="mb-1 text-xs font-semibold text-gray-500">報名費用</div>
+      <div class="flex flex-wrap gap-2">
+        <UBadge
+          v-for="fee in game.game_fee"
+          :key="fee.id"
+          color="success"
+          variant="soft"
+        >
+          {{ fee.feeType }}：{{ fee.amount }} 元
+        </UBadge>
+      </div>
+    </div>
     <template #description>
       <div class="space-y-4">
         <!-- 場地資訊 -->

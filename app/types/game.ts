@@ -1,6 +1,28 @@
 /**
  * Game entity type definition
  */
+export interface GameCategory {
+  id: string
+  gameId: string
+  categoryName: string
+  conditions?: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface GameFee {
+  id: string
+  gameId: string
+  categoryId?: string | null
+  feeType: string
+  description: string
+  amount: number
+  isRequired: boolean
+  note?: string | null
+  createdAt: string
+  updatedAt: string
+}
+
 export interface Game {
   id: string | number
   name: string
@@ -13,6 +35,8 @@ export interface Game {
   gameEnd: string
   createdAt: string
   updatedAt: string
+  game_category?: GameCategory[]
+  game_fee?: GameFee[]
 }
 
 /**

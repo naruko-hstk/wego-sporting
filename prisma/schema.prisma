@@ -68,7 +68,8 @@ model game {
 model game_category {
   id           String         @id @default(uuid())
   gameId       String
-  categoryName String // 組別全名，直接填寫
+  categoryType String? // 項目分類（如品勢、對練、擊破）
+  categoryName String // 完整項目名（如品勢-個人品勢）
   conditions   String? // 條件限制（選填），例如：年齡限制、性別限制等
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt

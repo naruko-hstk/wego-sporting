@@ -76,6 +76,35 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
+    // 直接傳遞新版 categories 結構
+    const categories = Array.isArray(body.categories)
+      ? body.categories.filter((cat) => cat.categoryType && cat.categoryName)
+      : []
+
+    // 處理 fees：若只傳 categoryType，則自動為該分類下所有組別產生費用
+    const fees = []
+    if (Array.isArray(body.fees)) {
+      for (const fee of body.fees) {
+        if (fee.categoryType && !fee.categoryId) {
+          // 自動對應所有該分類下的 category
+          const relatedCats = categories.filter(
+            (cat) => cat.categoryType === fee.categoryType,
+          )
+          for (const cat of relatedCats) {
+            fees.push({
+              feeType: fee.feeType || fee.categoryType,
+              amount: fee.amount,
+              description: fee.description || "",
+              categoryType: fee.categoryType,
+              categoryName: cat.categoryName,
+            })
+          }
+        } else {
+          fees.push(fee)
+        }
+      }
+    }
+
     const result = await createGame({
       name: body.name,
       region: body.region,
@@ -87,8 +116,8 @@ export default defineEventHandler(async (event) => {
       gameEnd,
       basis: body.basis,
       note: body.note,
-      categories: body.categories,
-      fees: body.fees,
+      categories,
+      fees,
     })
 
     return result
